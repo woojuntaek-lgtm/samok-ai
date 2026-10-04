@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#123a6b">
+<meta name="description" content="몇 수 앞을 내다보는 AI와 사목(네 개 잇기) 대결. AI가 살펴본 경우의 수와 각 자리 점수를 보며 게임 트리 탐색 원리를 체험하세요.">
+<title>사목 AI 대전</title>
+<style>
+:root{--bg:#eef3f9;--card:#fff;--ink:#14243a;--dim:#5d6f86;--line:#d6e0ec;--pri:#1b4f91;--pri2:#e3ecf8;--board:#1f5fb4;--hole:#eef3f9;--me:#f2c230;--ai:#e2483d;--r:18px}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1621;--card:#18212e;--ink:#e6edf6;--dim:#93a4ba;--line:#2a3747;--pri:#7fb0ff;--pri2:#1e2c40;--board:#1d4f95;--hole:#0f1621}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,-apple-system,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif}
+header{padding:calc(12px + env(safe-area-inset-top)) 16px 2px;max-width:520px;margin:0 auto;display:flex;justify-content:space-between;align-items:baseline}
+header h1{margin:0;font-size:19px;color:var(--pri)}header span{font-size:12.5px;color:var(--dim)}
+main{max-width:520px;margin:0 auto;padding:8px 10px 20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:12px}
+.card h2{font-size:15px;margin:0 0 8px}
+.btn{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:14px;padding:10px 12px;font:inherit;font-weight:700;cursor:pointer;min-height:46px}
+.btn.pri{background:var(--pri);border-color:var(--pri);color:#fff}@media (prefers-color-scheme:dark){.btn.pri{color:#0b1220}}
+.btn.wide{width:100%}.btn:disabled{opacity:.45}
+.row{display:flex;gap:8px}.row>*{flex:1}.mt{margin-top:10px}.dim{color:var(--dim)}.small{font-size:12.5px}
+.seg{display:flex;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.seg button{flex:1;border:0;background:transparent;padding:8px 2px;font:inherit;font-size:13.5px;color:var(--dim);cursor:pointer;line-height:1.3}
+.seg button small{display:block;font-size:11px}
+.seg button.on{background:var(--pri2);color:var(--pri);font-weight:700}
+.status{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:14px}
+.status .st{font-weight:700}
+.disc{display:inline-block;width:14px;height:14px;border-radius:50%;vertical-align:-2px;margin-right:4px}
+.disc.me{background:var(--me)}.disc.ai{background:var(--ai)}
+.boardwrap{position:relative;background:var(--board);border-radius:16px;padding:6px;touch-action:manipulation;user-select:none}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.cell{aspect-ratio:1/1;border-radius:50%;background:var(--hole);position:relative;overflow:hidden;box-shadow:inset 0 3px 5px rgba(0,0,0,.25)}
+.cell i{position:absolute;inset:0;border-radius:50%;transform:translateY(-600%);transition:transform .32s cubic-bezier(.35,0,.6,1.3)}
+.cell i.in{transform:translateY(0)}
+.cell i.me{background:radial-gradient(circle at 35% 30%,#ffe58a,var(--me) 60%,#c99a12)}
+.cell i.ai{background:radial-gradient(circle at 35% 30%,#ff9c94,var(--ai) 60%,#a92b22)}
+.cell.win i{animation:pulse .8s ease-in-out infinite alternate}
+@keyframes pulse{from{filter:brightness(1)}to{filter:brightness(1.45) drop-shadow(0 0 6px #fff)}}
+.cell.last::after{content:"";position:absolute;inset:38%;border-radius:50%;background:rgba(255,255,255,.75)}
+.cols{position:absolute;inset:0;display:grid;grid-template-columns:repeat(7,1fr)}
+.cols button{border:0;background:transparent;cursor:pointer}
+.cols button.hint{background:transparent;box-shadow:inset 0 0 0 3px #ffe066;border-radius:10px;animation:hb 1s ease-in-out infinite alternate}
+@keyframes hb{from{box-shadow:inset 0 0 0 2px #ffe066}to{box-shadow:inset 0 0 0 5px #ffe066}}
+.evals.mine div.best{background:var(--me);color:#3a2a00}
+.cols button.hov{background:rgba(255,255,255,.14);border-radius:10px}
+.cell i.ghost{transform:none!important;background:var(--me);opacity:.45;transition:none}
+.rules{background:var(--pri2);border-radius:14px;padding:10px 12px;margin-bottom:12px}
+.rules summary{font-weight:700;color:var(--pri);cursor:pointer;font-size:14.5px}
+.rules ol{margin:8px 0 2px;padding-left:20px;font-size:13.5px}.rules li{margin:3px 0}
+.rules .mini{display:flex;gap:10px;align-items:flex-end;margin-top:8px;font-size:12px;color:var(--dim)}
+.rules .mini svg{width:110px;flex:none}
+.evals{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin:6px 6px 0;text-align:center;font-size:11px;font-variant-numeric:tabular-nums}
+.evals div{border-radius:6px;padding:2px 0;background:var(--bg);color:var(--dim)}
+.evals div.best{background:var(--ai);color:#fff;font-weight:700}
+.think{background:var(--pri2);border-radius:12px;padding:9px 12px;font-size:13.5px;margin-top:10px;min-height:42px}
+.kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.kpi div{background:var(--bg);border-radius:12px;padding:8px 4px}.kpi b{display:block;font-size:19px}.kpi span{font-size:11.5px;color:var(--dim)}
+.edu p{margin:0 0 8px}.edu b{color:var(--pri)}
+.foot{text-align:center;font-size:11.5px;color:var(--dim);padding:6px 0 16px}
+.dots::after{content:"";animation:d 1s steps(4) infinite}
+@keyframes d{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
+</style></head>
+<body>
+<header><h1>사목 AI 대전</h1><span>몇 수 앞을 보는 AI와 한판</span></header>
+<main>
+<details class="rules" id="rules" open>
+  <summary>게임 방법 (30초)</summary>
+  <ol>
+    <li>판은 <b>세워져 있습니다.</b> 7개 <b>세로줄 중 하나</b>를 누르면, 돌이 그 줄의 <b>맨 아래 빈칸까지 떨어집니다.</b></li>
+    <li>내 돌 <span class="disc me"></span>4개를 <b>가로·세로·대각선</b> 어느 쪽으로든 먼저 한 줄로 이으면 승리!</li>
+    <li>손가락을 대고 있으면 돌이 떨어질 자리가 미리 보입니다. 원하는 줄에서 <b>손을 떼면</b> 둡니다.</li>
+  </ol>
+  <div class="mini"><svg viewBox="0 0 110 80" aria-hidden="true"><rect x="0" y="0" width="110" height="80" rx="8" fill="#1f5fb4"/>
+  <g fill="#eef3f9"><circle cx="16" cy="14" r="8"/><circle cx="38" cy="14" r="8"/><circle cx="60" cy="14" r="8"/><circle cx="82" cy="14" r="8"/><circle cx="16" cy="40" r="8"/><circle cx="38" cy="40" r="8"/><circle cx="60" cy="40" r="8"/><circle cx="82" cy="40" r="8"/><circle cx="16" cy="66" r="8"/><circle cx="82" cy="66" r="8"/></g>
+  <circle cx="38" cy="66" r="8" fill="#e2483d"/><circle cx="60" cy="66" r="8" fill="#f2c230" opacity=".45"/>
+  <path d="M60 -2 L60 50" stroke="#f2c230" stroke-width="2.5" stroke-dasharray="4 3"/><path d="M55 46 L60 54 L65 46" fill="none" stroke="#f2c230" stroke-width="2.5"/></svg>
+  <span>3번째 줄을 누르면 돌이 위에서 떨어져 맨 아래 빈칸에 쌓입니다. 아래가 차야 위 칸을 쓸 수 있어서, 상대에게 "다음 자리"를 열어 주지 않는 것이 요령입니다. 가운데 줄이 유리합니다.</span></div>
+</details>
+<div class="card">
+  <div class="seg" id="lvl">
+    <button type="button" data-v="1">초급<small>2수 앞</small></button>
+    <button type="button" data-v="2" class="on">중급<small>4수 앞</small></button>
+    <button type="button" data-v="3">고급<small>6수 앞</small></button>
+    <button type="button" data-v="4">고수<small>8수 앞</small></button>
+  </div>
+  <div class="row mt">
+    <div class="seg" id="first"><button type="button" data-v="me" class="on">내가 먼저</button><button type="button" data-v="ai">AI 먼저</button></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="status"><span class="st" id="st"></span><span class="small dim" id="moveNo"></span></div>
+  <div class="boardwrap mt" id="bw"><div class="grid" id="grid"></div><div class="cols" id="cols"></div></div>
+  <div class="evals" id="evals"></div>
+  <div class="think" id="think">세로줄을 눌러 돌을 떨어뜨리세요. 가로·세로·대각선으로 <b>4개를 먼저 잇는 쪽</b>이 이깁니다.</div>
+  <div class="row mt"><button class="btn" id="hintBtn" type="button">💡 훈수</button><button class="btn" id="undo" type="button">무르기</button><button class="btn pri" id="newg" type="button">새 게임</button></div>
+  <p class="small dim" id="hintNote" style="margin:6px 0 0"></p>
+</div>
+
+<div class="card">
+  <h2>전적 <small class="dim" style="font-weight:400" id="lvlName"></small></h2>
+  <div class="kpi" id="rec"></div>
+</div>
+
+<div class="card edu small">
+  <h2>AI는 어떻게 두는 걸까?</h2>
+  <p>AI는 "내가 여기 두면 → 상대는 어디 둘까 → 그럼 나는…" 하고 <b>앞으로 벌어질 수를 나무처럼 펼쳐</b> 봅니다(게임 트리). 자기 차례에는 가장 좋은 수를, 상대 차례에는 상대가 가장 아프게 둘 수를 가정해 계산하는데, 이것을 <b>미니맥스(Minimax)</b>라고 합니다.</p>
+  <p>경우의 수는 한 수마다 7배씩 늘어 8수 앞이면 수백만 가지가 됩니다. 그래서 "어차피 안 고를 가지"는 미리 잘라 내는 <b>알파-베타 가지치기</b>로 계산을 크게 줄입니다. 끝까지 못 본 판은 "3개 이어진 줄, 가운데 자리" 같은 기준으로 점수를 매기는데, 이것이 <b>평가 함수(휴리스틱)</b>입니다.</p>
+  <p style="margin:0">보드 아래 숫자는 AI가 방금 각 줄에 매긴 점수입니다(빨간 칸이 선택). 수준이 높을수록 더 멀리 내다보고, 살펴본 경우의 수도 크게 늘어납니다. 바둑의 알파고도 이 "탐색 + 평가" 구조에 학습을 더한 것입니다.</p>
+</div>
+<div class="foot">정필 수심명 · 사목 AI 대전 v1.0 · 인터넷 없이 내 폰에서만 동작</div>
+</main>
+<script>
+(function(){
+"use strict";
+var C=7,R=6,EMPTY=0,ME=1,AI=2,WIN=1000000;
+var board,heights,moves,turn,over,level=2,first="me",busy=false,KEY="c4ai_v1";
+var DEPTH={1:2,2:4,3:6,4:8},LNAME={1:"초급",2:"중급",3:"고급",4:"고수"};
+var rec={};try{rec=JSON.parse(localStorage.getItem(KEY)||"{}")||{};}catch(e){}
+function $(i){return document.getElementById(i);}
+function buzz(ms){try{if(navigator.vibrate)navigator.vibrate(ms);}catch(e){}}
+
+/* ---------- 보드 그리기 ---------- */
+var cells=[];
+(function build(){
+  var g=$("grid");for(var r=R-1;r>=0;r--)for(var c=0;c<C;c++){var d=document.createElement("div");d.className="cell";d.dataset.r=r;d.dataset.c=c;d.appendChild(document.createElement("i"));g.appendChild(d);cells[r*C+c]=d;}
+  var cs=$("cols");for(var c2=0;c2<C;c2++){var b=document.createElement("button");b.type="button";b.setAttribute("aria-label",(c2+1)+"번째 줄");b.dataset.c=c2;cs.appendChild(b);}
+})();
+/* 미리보기: 손가락을 대면 떨어질 자리 표시, 떼면 두기 */
+var hov=-1,ghostIdx=-1,pressing=false;
+function colAt(x,y){var el=document.elementFromPoint(x,y);return el&&el.parentNode&&el.parentNode.id==="cols"?+el.dataset.c:-1;}
+function setHover(c){
+  if(ghostIdx>=0){var gi=cells[ghostIdx].firstChild;gi.classList.remove("ghost");if(!board[ghostIdx]){gi.className="";gi.style.transform="";}ghostIdx=-1;}
+  document.querySelectorAll("#cols button").forEach(function(b){b.classList.toggle("hov",+b.dataset.c===c);});
+  hov=c;
+  if(c<0||over||busy||turn!==ME||!canPlay(c))return;
+  ghostIdx=heights[c]*C+c;var i=cells[ghostIdx].firstChild;i.className="ghost";
+}
+(function(){var cs=$("cols");
+  cs.addEventListener("pointerdown",function(e){pressing=true;try{cs.setPointerCapture(e.pointerId);}catch(x){}setHover(colAt(e.clientX,e.clientY));e.preventDefault();});
+  cs.addEventListener("pointermove",function(e){if(!pressing&&e.pointerType!=="mouse")return;var c=colAt(e.clientX,e.clientY);if(c!==hov)setHover(c);});
+  cs.addEventListener("pointerup",function(e){if(!pressing)return;pressing=false;var c=colAt(e.clientX,e.clientY);setHover(-1);if(c>=0)human(c);});
+  cs.addEventListener("pointercancel",function(){pressing=false;setHover(-1);});
+  cs.addEventListener("pointerleave",function(e){if(e.pointerType==="mouse"&&!pressing)setHover(-1);});
+})();
+function paintCell(r,c,who,anim){var d=cells[r*C+c],i=d.firstChild;i.className=who===ME?"me":who===AI?"ai":"";if(!who){i.className="";return;}
+  if(anim){i.style.transition="none";i.style.transform="translateY(-"+((R-r)*110)+"%)";void i.offsetWidth;i.style.transition="";i.style.transform="";i.classList.add("in");}else{i.classList.add("in");i.style.transform="";}}
+function clearMarks(){cells.forEach(function(d){d.classList.remove("win","last");});}
+
+/* ---------- 규칙 ---------- */
+function canPlay(c){return heights[c]<R;}
+function play(c,who){var r=heights[c];board[r*C+c]=who;heights[c]++;moves.push(c);return r;}
+function unplay(){var c=moves.pop();heights[c]--;board[heights[c]*C+c]=EMPTY;}
+var LINES=(function(){var L=[];for(var r=0;r<R;r++)for(var c=0;c<C;c++){[[0,1],[1,0],[1,1],[1,-1]].forEach(function(d){var cells=[];for(var k=0;k<4;k++){var rr=r+d[0]*k,cc=c+d[1]*k;if(rr<0||rr>=R||cc<0||cc>=C)return;cells.push(rr*C+cc);}L.push(cells);});}return L;})();
+function winner(){for(var i=0;i<LINES.length;i++){var l=LINES[i],v=board[l[0]];if(v&&v===board[l[1]]&&v===board[l[2]]&&v===board[l[3]])return {who:v,cells:l};}return null;}
+/* 마지막 수 기준 빠른 승리 판정 */
+function wonAt(r,c,who){var dirs=[[0,1],[1,0],[1,1],[1,-1]];for(var i=0;i<4;i++){var dr=dirs[i][0],dc=dirs[i][1],n=1;
+  for(var s=1;s<4;s++){var rr=r+dr*s,cc=c+dc*s;if(rr<0||rr>=R||cc<0||cc>=C||board[rr*C+cc]!==who)break;n++;}
+  for(var s2=1;s2<4;s2++){var r2=r-dr*s2,c2=c-dc*s2;if(r2<0||r2>=R||c2<0||c2>=C||board[r2*C+c2]!==who)break;n++;}
+  if(n>=4)return true;}return false;}
+
+/* ---------- AI: 미니맥스 + 알파-베타 ---------- */
+var ORDER=[3,2,4,1,5,0,6],nodes=0;
+function evalBoard(){ /* AI 관점 점수 */
+  var s=0;
+  for(var r=0;r<R;r++){if(board[r*C+3]===AI)s+=3;else if(board[r*C+3]===ME)s-=3;}
+  for(var i=0;i<LINES.length;i++){var l=LINES[i],a=0,m=0;for(var k=0;k<4;k++){var v=board[l[k]];if(v===AI)a++;else if(v===ME)m++;}
+    if(a&&m)continue;if(a===3)s+=50;else if(a===2)s+=8;else if(m===3)s-=60;else if(m===2)s-=8;}
+  return s;
+}
+function negamax(depth,alpha,beta,who){
+  nodes++;
+  if(moves.length===C*R)return 0;
+  if(depth===0)return who===AI?evalBoard():-evalBoard();
+  var best=-Infinity,opp=who===AI?ME:AI;
+  for(var i=0;i<C;i++){var c=ORDER[i];if(!canPlay(c))continue;var r=play(c,who);
+    var v=wonAt(r,c,who)?(WIN+depth):-negamax(depth-1,-beta,-alpha,opp);
+    unplay();if(v>best)best=v;if(v>alpha)alpha=v;if(alpha>=beta)break;}
+  return best;
+}
+function aiChoose(){
+  nodes=0;var depth=DEPTH[level],t0=performance.now(),scores=[null,null,null,null,null,null,null],best=-Infinity,bestC=-1;
+  /* 바로 이기는 수 / 바로 막아야 하는 수는 먼저 확인 */
+  for(var c=0;c<C;c++)if(canPlay(c)){var r=play(c,AI),w=wonAt(r,c,AI);unplay();if(w){scores[c]=WIN;return {c:c,scores:scores,nodes:1,ms:0,depth:depth,why:"바로 이기는 수"};}}
+  for(var i=0;i<C;i++){var cc=ORDER[i];if(!canPlay(cc))continue;var rr=play(cc,AI);
+    var v=wonAt(rr,cc,AI)?WIN:-negamax(depth-1,-Infinity,Infinity,ME);unplay();scores[cc]=v;if(v>best){best=v;bestC=cc;}}
+  /* 초급은 가끔 실수 */
+  if(level===1&&Math.random()<0.3){var opts=[];for(var k=0;k<C;k++)if(scores[k]!==null&&scores[k]>-WIN/2)opts.push(k);if(opts.length){bestC=opts[Math.floor(Math.random()*opts.length)];}}
+  return {c:bestC,scores:scores,nodes:nodes,ms:Math.round(performance.now()-t0),depth:depth,best:best};
+}
+
+/* ---------- 훈수: 내 입장에서 같은 탐색 ---------- */
+var hintsUsed=0,HINT_DEPTH=6;
+function clearHint(){document.querySelectorAll("#cols button").forEach(function(b){b.classList.remove("hint");});$("evals").classList.remove("mine");}
+function hint(){
+  if(over||busy||turn!==ME)return;
+  nodes=0;var t0=performance.now(),scores=[null,null,null,null,null,null,null],best=-Infinity,bestC=-1,why="";
+  for(var c=0;c<C;c++)if(canPlay(c)){var r=play(c,ME),w=wonAt(r,c,ME);unplay();if(w){bestC=c;why="여기 두면 <b>바로 이깁니다!</b>";scores[c]=WIN;break;}}
+  if(bestC<0){
+    var threat=-1;for(var c2=0;c2<C;c2++)if(canPlay(c2)){var r2=play(c2,AI),w2=wonAt(r2,c2,AI);unplay();if(w2){threat=c2;break;}}
+    for(var i=0;i<C;i++){var cc=ORDER[i];if(!canPlay(cc))continue;play(cc,ME);var v=-negamax(HINT_DEPTH-1,-Infinity,Infinity,AI);unplay();scores[cc]=v;if(v>best){best=v;bestC=cc;}}
+    if(threat>=0&&bestC===threat)why="여기를 막지 않으면 <b>AI가 바로 이깁니다.</b>";
+    else if(best>=WIN/2)why="이 줄로 가면 <b>이기는 길</b>이 보입니다.";
+    else if(best<=-WIN/2)why="어디에 둬도 불리하지만, 그중 <b>가장 오래 버티는 수</b>입니다.";
+    else why=HINT_DEPTH+"수 앞까지 "+nodes.toLocaleString()+"가지를 따져 본 <b>가장 좋은 수</b>입니다.";
+  }
+  hintsUsed++;
+  $("evals").innerHTML=scores.map(function(s,i){var t=s===null?"–":(s>=WIN/2?"승":s<=-WIN/2?"패":s);return '<div class="'+(i===bestC?"best":"")+'">'+t+'</div>';}).join("");
+  $("evals").classList.add("mine");
+  document.querySelectorAll("#cols button").forEach(function(b){b.classList.toggle("hint",+b.dataset.c===bestC);});
+  $("think").innerHTML="💡 훈수: <b>"+(bestC+1)+"번 줄</b> — "+why+" <span class='dim'>(노란 칸 숫자는 내 입장의 점수)</span>";
+  $("hintNote").textContent="이번 판 훈수 "+hintsUsed+"번 사용";
+}
+$("hintBtn").onclick=hint;
+
+/* ---------- 진행 ---------- */
+function newGame(){
+  try{if(localStorage.getItem('c4rulesSeen'))$('rules').open=false;}catch(e){}
+  hintsUsed=0;$('hintNote').textContent='';clearHint();board=new Array(C*R).fill(EMPTY);heights=new Array(C).fill(0);moves=[];over=false;busy=false;
+  cells.forEach(function(d){d.firstChild.className="";d.firstChild.style.transform="";});clearMarks();
+  $("evals").innerHTML="";$("think").innerHTML="세로줄을 눌러 돌을 떨어뜨리세요. 가로·세로·대각선으로 <b>4개를 먼저 잇는 쪽</b>이 이깁니다.";
+  turn=first==="me"?ME:AI;status();renderRec();
+  if(turn===AI)setTimeout(aiTurn,350);
+}
+function status(msg){
+  $("st").innerHTML=msg||(turn===ME?'<span class="disc me"></span>내 차례':'<span class="disc ai"></span>AI가 생각 중<span class="dots"></span>');
+  $("moveNo").textContent=LNAME[level]+" · "+moves.length+"수";
+  $("undo").disabled=busy||moves.length<2||over;$("hintBtn").disabled=busy||over||turn!==ME;
+}
+function human(c){
+  try{localStorage.setItem('c4rulesSeen','1');}catch(e){}
+  if(over||busy||turn!==ME||!canPlay(c))return;
+  clearHint();var r=play(c,ME);clearMarks();paintCell(r,c,ME,true);cells[r*C+c].classList.add("last");buzz(10);
+  if(checkEnd(r,c,ME))return;
+  turn=AI;busy=true;status();setTimeout(aiTurn,380);
+}
+function aiTurn(){
+  busy=true;status();
+  setTimeout(function(){
+    var res=aiChoose(),c=res.c,r=play(c,AI);clearMarks();paintCell(r,c,AI,true);cells[r*C+c].classList.add("last");
+    $("evals").classList.remove("mine");$("evals").innerHTML=res.scores.map(function(s,i){var t=s===null?"–":(s>=WIN/2?"승":s<=-WIN/2?"패":s);return '<div class="'+(i===c?"best":"")+'">'+t+'</div>';}).join("");
+    var mx=Math.max.apply(null,res.scores.filter(function(x){return x!==null;}));
+    var verdict=mx>=WIN/2?"이길 길이 보입니다 😈":mx<=-WIN/2?"어떻게 둬도 질 것 같습니다… 😵":"";
+    $("think").innerHTML=res.why?"AI: <b>"+(c+1)+"번 줄</b>에 두면 바로 이깁니다!":"AI가 <b>"+res.depth+"수 앞</b>까지 <b>"+res.nodes.toLocaleString()+"가지</b> 경우를 살펴보고("+res.ms+"ms) <b>"+(c+1)+"번 줄</b>을 골랐습니다. "+verdict;
+    busy=false;if(checkEnd(r,c,AI))return;turn=ME;status();
+  },60);
+}
+function checkEnd(r,c,who){
+  if(wonAt(r,c,who)){over=true;var w=winner();if(w)w.cells.forEach(function(i){cells[i].classList.add("win");});
+    record(who===ME?"w":"l");status(who===ME?'<span class="disc me"></span>당신의 승리! 🎉':'<span class="disc ai"></span>AI 승리');buzz(who===ME?[30,40,30]:80);
+    if(who===ME)$("think").innerHTML="축하합니다! <b>"+LNAME[level]+"</b> AI를 이겼습니다."+(hintsUsed?" (훈수 "+hintsUsed+"번 사용)":"")+(level<4?" 한 단계 올려 보세요.":" 고수 AI까지 이기셨네요!");
+    return true;}
+  if(moves.length===C*R){over=true;record("d");status("무승부");return true;}
+  return false;
+}
+function record(k){var o=rec[level]||{w:0,l:0,d:0};o[k]++;rec[level]=o;try{localStorage.setItem(KEY,JSON.stringify(rec));}catch(e){}renderRec();}
+function renderRec(){var o=rec[level]||{w:0,l:0,d:0};$("lvlName").textContent=LNAME[level]+" AI 상대";
+  $("rec").innerHTML='<div><b>'+o.w+'</b><span>승</span></div><div><b>'+o.d+'</b><span>무</span></div><div><b>'+o.l+'</b><span>패</span></div>';}
+$("undo").onclick=function(){if(busy||over||moves.length<2)return;for(var k=0;k<2;k++){var c=moves[moves.length-1];var r=heights[c]-1;unplay();paintCell(r,c,0);}clearMarks();$("evals").innerHTML="";$("think").textContent="한 수 물렀습니다. 다시 두어 보세요.";turn=ME;status();};
+$("newg").onclick=newGame;
+function segBind(id,cb){document.querySelectorAll("#"+id+" button").forEach(function(b){b.onclick=function(){document.querySelectorAll("#"+id+" button").forEach(function(x){x.classList.toggle("on",x===b);});cb(b.dataset.v);};});}
+segBind("lvl",function(v){level=+v;newGame();});
+segBind("first",function(v){first=v;newGame();});
+newGame();
+window.__c4={get board(){return board;},aiChoose:aiChoose,play:play,unplay:unplay,newGame:newGame,setLevel:function(l){level=l;}};
+})();
+</script>
+</body></html>
